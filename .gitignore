@@ -1,0 +1,5 @@
+claude_resp/
+__pycache__/
+.env
+.env.*
+!.env.*.example

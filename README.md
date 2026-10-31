@@ -1,101 +1,54 @@
 # Claude Code response saver
 
-Save this as `save_claude_responses.py`. It checks Claude Code JSONL transcripts at midnight and noon, then writes new assistant responses to `claude_resp` with the date in each filename.
+Saves every Claude Code response to its own Markdown file in `claude_resp/` as soon as it arrives.
+Files are named `response_0001_2026-10-31.md`, numbered in order, with the reply's date.
 
-```python
-from __future__ import annotations
+## How it works
 
-import json
-import os
-import time
-from datetime import datetime, timedelta
-from pathlib import Path
+`save_claude_responses.py` runs as a Claude Code **hook**, set up in `~/.claude/settings.json`:
 
-SOURCE = Path(os.environ.get("CLAUDE_PROJECTS", Path.home() / ".claude" / "projects"))
-OUTPUT = Path(__file__).with_name("claude_resp")
-STATE = OUTPUT / ".processed.json"
+- **Stop** runs it each time Claude finishes replying. It runs in the background, so it doesn't slow
+  Claude down.
+- **SessionEnd** runs it once more when a session closes, to catch a reply that was still being
+  written to disk.
 
+Claude Code passes the hook the path of the session's transcript (a `.jsonl` file under
+`~/.claude/projects`). The script reads the lines added since its last run and saves the text of each
+assistant reply. Thinking, tool calls and tool output are skipped. `claude_resp/.state.json` records
+how far each transcript has been read, so no reply is saved twice.
 
-def load_state() -> set[str]:
-	try:
-		return set(json.loads(STATE.read_text(encoding="utf-8")))
-	except (FileNotFoundError, json.JSONDecodeError):
-		return set()
+Nothing needs to stay running, and there's nothing to start: the hooks work in every new Claude Code
+session.
 
+## Hook settings
 
-def text_from(content) -> str:
-	if isinstance(content, str):
-		return content
-	if isinstance(content, list):
-		return "\n".join(
-			item if isinstance(item, str) else item.get("text", "")
-			for item in content
-			if isinstance(item, str)
-			or isinstance(item, dict) and item.get("type") == "text"
-		)
-	return ""
-
-
-def collect() -> None:
-	OUTPUT.mkdir(exist_ok=True)
-	processed = load_state()
-	number = len(list(OUTPUT.glob("response_*.md"))) + 1
-
-	for path in SOURCE.rglob("*.jsonl"):
-		try:
-			lines = path.read_text(encoding="utf-8").splitlines()
-		except (OSError, UnicodeDecodeError):
-			continue
-		for line_number, line in enumerate(lines, 1):
-			key = f"{path.resolve()}:{line_number}"
-			if key in processed:
-				continue
-			processed.add(key)
-			try:
-				record = json.loads(line)
-				message = record.get("message", record)
-				if message.get("role") != "assistant":
-					continue
-				response = text_from(message.get("content")).strip()
-				if not response:
-					continue
-				date = datetime.now().astimezone().strftime("%Y-%m-%d")
-				(OUTPUT / f"response_{number:04d}_{date}.md").write_text(
-					response + "\n", encoding="utf-8"
-				)
-				number += 1
-			except (json.JSONDecodeError, AttributeError, OSError):
-				continue
-
-	STATE.write_text(json.dumps(sorted(processed), indent=2), encoding="utf-8")
-
-
-def next_run() -> datetime:
-	now = datetime.now().astimezone()
-	noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
-	midnight = (now + timedelta(days=1)).replace(
-		hour=0, minute=0, second=0, microsecond=0
-	)
-	return noon if now < noon else midnight
-
-
-if __name__ == "__main__":
-	collect()  # also process responses immediately on startup
-	while True:
-		run_at = next_run()
-		time.sleep(max(1, (run_at - datetime.now().astimezone()).total_seconds()))
-		collect()
+```json
+"hooks": {
+  "Stop": [{ "hooks": [{ "type": "command", "async": true, "timeout": 30,
+    "command": "python \"C:/Users/av/git/claude-response-saver/save_claude_responses.py\"" }] }],
+  "SessionEnd": [{ "hooks": [{ "type": "command", "timeout": 30,
+    "command": "python \"C:/Users/av/git/claude-response-saver/save_claude_responses.py\"" }] }]
+}
 ```
 
-Run it from the repository directory:
+Review or turn them off with `/hooks` in Claude Code.
+
+## Saving older conversations
+
+The hooks only save replies from sessions that run while the hooks are installed. To save every reply in
+every saved transcript once:
 
 ```powershell
-python save_claude_responses.py
+python save_claude_responses.py --all
 ```
 
-By default, transcripts are read from `~/.claude/projects`. To use another location:
+Replies that were already saved are skipped. Options, set as environment variables:
+
+- `CLAUDE_PROJECTS`: where transcripts are read from (default `~/.claude/projects`)
+- `CLAUDE_RESP_DIR`: where responses are written (default `claude_resp` next to the script)
+
+## Tests
 
 ```powershell
-$env:CLAUDE_PROJECTS = "C:\path\to\claude\projects"
-python save_claude_responses.py
+python -m unittest discover -s tests
 ```
