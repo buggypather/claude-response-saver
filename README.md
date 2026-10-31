@@ -22,12 +22,14 @@ session.
 
 ## Hook settings
 
+Replace `<path-to>` with the folder you cloned this repo into:
+
 ```json
 "hooks": {
   "Stop": [{ "hooks": [{ "type": "command", "async": true, "timeout": 30,
-    "command": "python \"C:/Users/av/git/claude-response-saver/save_claude_responses.py\"" }] }],
+    "command": "python \"<path-to>/claude-response-saver/save_claude_responses.py\"" }] }],
   "SessionEnd": [{ "hooks": [{ "type": "command", "timeout": 30,
-    "command": "python \"C:/Users/av/git/claude-response-saver/save_claude_responses.py\"" }] }]
+    "command": "python \"<path-to>/claude-response-saver/save_claude_responses.py\"" }] }]
 }
 ```
 
