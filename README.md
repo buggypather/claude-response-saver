@@ -1,7 +1,27 @@
 # Claude Code response saver
 
-Saves every Claude Code response to its own Markdown file in `claude_resp/` as soon as it arrives.
-Files are named `response_0001_2026-10-31.md`, numbered in order, with the reply's date.
+Saves every Claude Code response to its own Markdown file in `claude_resp/` as soon as it arrives,
+with the request it answers. Files are named `response_0001_2026-10-31.md`, numbered in order, with
+the reply's date.
+
+The first response to a request looks like this:
+
+```markdown
+## You
+
+Can you fix the login bug?
+
+## Claude
+
+Yes. The session cookie expired too early because...
+```
+
+When Claude writes more than once while working on a request (an update between steps, then the
+answer), the later files start with `## Claude (continued from response_0001_2026-10-31.md)`, a link
+to the file with the request.
+
+Only what you typed is saved as the request. What Claude Code adds to it (the file open in your
+editor, selected lines, reminders) is left out, and pasted images are noted as `(1 image attached)`.
 
 ## How it works
 
@@ -15,7 +35,7 @@ Files are named `response_0001_2026-10-31.md`, numbered in order, with the reply
 Claude Code passes the hook the path of the session's transcript (a `.jsonl` file under
 `~/.claude/projects`). The script reads the lines added since its last run and saves the text of each
 assistant reply. Thinking, tool calls and tool output are skipped. `claude_resp/.state.json` records
-how far each transcript has been read, so no reply is saved twice.
+how far each transcript has been read, and the request being answered, so no reply is saved twice.
 
 Nothing needs to stay running, and there's nothing to start: the hooks work in every new Claude Code
 session.
